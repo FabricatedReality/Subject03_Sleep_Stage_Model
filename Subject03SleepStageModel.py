@@ -103,6 +103,7 @@ num_files = 14
 tr, te = train_test_split(files[:num_files], test_size=0.3, random_state=49)
 kf = KFold(n_splits=5)
 model = getModel()
+con_matrices = []
 
 round = 0
 for train, test in kf.split(tr):
@@ -115,11 +116,11 @@ for train, test in kf.split(tr):
     train_label=to_categorical(train_label,2)
     #test_label=to_categorical(test_label,2)
     
-    weight_path = './weiights/weight_best_'+str(round)+'.hdf5'
+    weight_path = './weights/weight_best_'+str(round)+'.hdf5'
     checkpoint = ModelCheckpoint(weight_path, monitor='f1',
                                 verbose=1, save_best_only=True, mode='max')
     early_stopping = EarlyStopping(monitor='f1', patience=200, mode='max')
-    csv_logger = CSVLogger('./weiights/weight_training_'+str(round)+'.log')
+    csv_logger = CSVLogger('./weights/weight_training_'+str(round)+'.log')
     callbacks_list = [checkpoint, early_stopping, csv_logger]
 
     model.fit(train_data, train_label, shuffle=False, epochs=200, batch_size=4000, callbacks=callbacks_list)
@@ -130,6 +131,8 @@ for train, test in kf.split(tr):
     predicted_labels = np.argmax(prediction, axis=1)
     cm = confusion_matrix(test_label, predicted_labels)
     total_samples = np.sum(cm)
-    cm_prob = cm.astype('float') / total_samples
-    print(cm_prob)
+    con_matrices.append(cm.astype('float') / total_samples)
+for i in range(5):
+    print(str(i)+"-th fold confusion matrix:")
+    print(con_matrices[i])
 
