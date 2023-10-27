@@ -14,6 +14,7 @@ from keras import backend as K
 num_features = 43
 label_idx = 44
 time_window = 3
+# index for which label to take from windowed features data
 window_label_idx = round(time_window / 2)
 
 def f1(y_true, y_pred):
@@ -67,6 +68,7 @@ def getModel():
 
     return model
 
+# Return a sliding window of size w
 def window(a, w = time_window, o = 1, copy = False):
     sh = (a.size - w + 1, w)
     st = a.strides * 2
@@ -97,16 +99,45 @@ def getData(train_files):
     features = totalData[:,:,:num_features]
 
     return features, labels
+
+import os
+import seaborn as sns
+import matplotlib.pyplot as plt
+# Copied code from compare_MUSE_data
+def produce_confusion_matrix(ground_truth, predicted_annotations, file_name): 
+    # Compute the confusion matrix
+    cm = confusion_matrix(ground_truth, predicted_annotations)
+    cm_percentage = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+    # Create a heatmap of the confusion matrix
     
+    unique_labels = np.unique(np.concatenate((ground_truth, predicted_annotations)))
+    sns.heatmap(cm_percentage, annot=True, fmt='.2%', cmap='Blues', 
+                xticklabels=unique_labels, 
+                yticklabels=unique_labels)
+
+    # Add labels and a title
+    plt.xlabel('Predicted')
+    plt.ylabel('Actual')
+    plt.title('Confusion Matrix for ' + file_name)
+
+    # Show the plot
+    if not os.path.exists('./plots'):
+        os.makedirs('./plots')
+    plot_path = os.path.join('./plots', file_name)
+    plt.savefig(plot_path)
+    plt.cla()
+    plt.clf()
+
 files = glob.glob('./data/*.csv')
-num_files = 14
-tr, te = train_test_split(files[:num_files], test_size=0.3, random_state=49)
-kf = KFold(n_splits=5, shuffle=False, random_state=49)
+num_files = 10
+#tr, te = train_test_split(files[:num_files], test_size=0.3, random_state=49)
+kf = KFold(n_splits=5, shuffle=False)
 model = getModel()
-con_matrices = []
 
 round = 0
-for train, test in kf.split(tr):
+predictions = []
+test_labels = []
+for train, test in kf.split(files[:num_files]):
     round += 1
     train_files = [files[i] for i in train]
     test_files = [files[i] for i in test]
@@ -128,8 +159,13 @@ for train, test in kf.split(tr):
 
     prediction = model.predict(test_data, batch_size=4000, verbose=1)
     predicted_labels = np.argmax(prediction, axis=1)
-    cm = confusion_matrix(test_label, predicted_labels)
-    con_matrices.append(cm.astype('float') / cm.sum(axis=1)[:, np.newaxis])
+
+    test_labels.append(test_label)
+    predictions.append(predicted_labels)
+
 for i in range(5):
     print(str(i+1)+"-th fold confusion matrix:")
-    print(con_matrices[i])
+    produce_confusion_matrix(test_labels[i], predictions[i], str(i+1)+'th-fold')
+true_label_sum = [item for sublist in test_labels for item in sublist]
+prediction_label_sum = [item for sublist in predictions for item in sublist]
+produce_confusion_matrix(true_label_sum, prediction_label_sum, 'all folds summed')
